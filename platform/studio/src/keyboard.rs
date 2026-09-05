@@ -304,6 +304,8 @@ pub enum KeyCode {
     ArrowRight,
 
     Unknown,
+    VolumeUp,
+    VolumeDown,
 }
 
 impl KeyCode {
@@ -663,7 +665,7 @@ impl KeyCode {
 }
 
 // Const array for efficient index-to-variant conversion (all 102 variants in order)
-const KEYCODE_VARIANTS: [KeyCode; 102] = [
+  const KEYCODE_VARIANTS: [KeyCode; 104] = [
     KeyCode::Escape,
     KeyCode::Back,
     KeyCode::Backtick,
@@ -766,6 +768,8 @@ const KEYCODE_VARIANTS: [KeyCode; 102] = [
     KeyCode::ArrowLeft,
     KeyCode::ArrowRight,
     KeyCode::Unknown,
+    KeyCode::VolumeUp,
+    KeyCode::VolumeDown,
 ];
 
 // Manual SerJson/DeJson implementations using integer encoding

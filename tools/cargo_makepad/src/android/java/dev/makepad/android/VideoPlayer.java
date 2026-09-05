@@ -30,6 +30,10 @@ public class VideoPlayer {
     public void beginPlayback() {
         if (mMediaPlayer != null && !mMediaPlayer.isPlaying()) {
             mMediaPlayer.start();
+            // Some devices only accept PlaybackParams after start().
+            if (Math.abs(mPlaybackRate - 1.0f) > 0.02f) {
+                applyPlaybackRate(mPlaybackRate);
+            }
         }
     }
 
@@ -106,11 +110,11 @@ public class VideoPlayer {
                     }
                     
                     mIsPrepared = true;
-                    if (Math.abs(mPlaybackRate - 1.0f) > 0.02f) {
-                        applyPlaybackRate(mPlaybackRate);
-                    }
                     if (mAutoplay) {
                         mp.start();
+                    }
+                    if (Math.abs(mPlaybackRate - 1.0f) > 0.02f) {
+                        applyPlaybackRate(mPlaybackRate);
                     }
                 }
             });
@@ -192,19 +196,62 @@ public class VideoPlayer {
             Log.w("MakepadVideoPlayer", "setPlaybackRate requires API 23+; ignored rate=" + rate);
             return;
         }
+        boolean wasPlaying = false;
         try {
-            boolean wasPlaying = mMediaPlayer.isPlaying();
-            PlaybackParams params = mMediaPlayer.getPlaybackParams();
-            // Speed without chipmunk pitch (UI steps are 0.5×–2.0×).
+            wasPlaying = mMediaPlayer.isPlaying();
+        } catch (IllegalStateException ignored) {
+            return;
+        }
+        if (trySetPlaybackParams(rate, false)) {
+            resumeIfNeeded(wasPlaying);
+            return;
+        }
+        // HW audio often cannot time-stretch; FAIL is the OEM default and
+        // aborts the whole params change so video stays at 1×.
+        if (trySetPlaybackParams(rate, true)) {
+            resumeIfNeeded(wasPlaying);
+            return;
+        }
+        Log.e("MakepadVideoPlayer", "setPlaybackRate failed rate=" + rate);
+    }
+
+    private boolean trySetPlaybackParams(float rate, boolean muteAudioFallback) {
+        try {
+            PlaybackParams params;
+            try {
+                params = mMediaPlayer.getPlaybackParams();
+            } catch (Exception e) {
+                params = new PlaybackParams();
+            }
             params.setSpeed(rate);
             params.setPitch(1.0f);
+            params.setAudioFallbackMode(
+                muteAudioFallback
+                    ? PlaybackParams.AUDIO_FALLBACK_MODE_MUTE
+                    : PlaybackParams.AUDIO_FALLBACK_MODE_DEFAULT
+            );
             mMediaPlayer.setPlaybackParams(params);
-            // Some devices pause when params change — resume if we were playing.
-            if (wasPlaying && !mMediaPlayer.isPlaying()) {
+            Log.i(
+                "MakepadVideoPlayer",
+                "setPlaybackRate ok rate=" + rate + " muteFallback=" + muteAudioFallback
+            );
+            return true;
+        } catch (Exception e) {
+            Log.w(
+                "MakepadVideoPlayer",
+                "setPlaybackRate try failed rate=" + rate
+                    + " muteFallback=" + muteAudioFallback + ": " + e
+            );
+            return false;
+        }
+    }
+
+    private void resumeIfNeeded(boolean wasPlaying) {
+        try {
+            if (wasPlaying && mMediaPlayer != null && !mMediaPlayer.isPlaying()) {
                 mMediaPlayer.start();
             }
-        } catch (Exception e) {
-            Log.e("MakepadVideoPlayer", "setPlaybackRate failed rate=" + rate + ": " + e);
+        } catch (IllegalStateException ignored) {
         }
     }
 

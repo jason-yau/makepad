@@ -326,6 +326,8 @@ pub(crate) fn android_to_makepad_key_code(key_code: u32) -> KeyCode {
         20 => KeyCode::ArrowDown,
         21 => KeyCode::ArrowLeft,
         22 => KeyCode::ArrowRight,
+        24 => KeyCode::VolumeUp,
+        25 => KeyCode::VolumeDown,
 
         29 => KeyCode::KeyA,
         30 => KeyCode::KeyB,

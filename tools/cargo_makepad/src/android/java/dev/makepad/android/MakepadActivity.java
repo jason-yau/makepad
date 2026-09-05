@@ -584,6 +584,9 @@ class MakepadSurface
         }
 
         if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP) || (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            if (MakepadActivity.consumeVolumeKeys) {
+                return true;
+            }
             return super.onKeyUp(keyCode, event);
         }
 
@@ -999,6 +1002,12 @@ public class MakepadActivity
     implements MidiManager.OnDeviceOpenedListener
 {
     private static final String LOG_TAG = "Makepad";
+    /** When true, volume keys stay in-app (speed / seek / video volume). */
+    public static volatile boolean consumeVolumeKeys = false;
+
+    public static void setConsumeVolumeKeys(boolean consume) {
+        consumeVolumeKeys = consume;
+    }
     private static final long SURFACE_COVER_FADE_OUT_MS = 100;
     private static final long WARM_RESUME_SNAPSHOT_MAX_AGE_MS = 10000;
     private static final int TASK_DESCRIPTION_BACKGROUND_COLOR = 0xFFF5F7FA;
@@ -1211,6 +1220,32 @@ public class MakepadActivity
         mLatestSurfaceSnapshotOrientation = getResources().getConfiguration().orientation;
         updateSurfaceSnapshotBackdrop();
         clearWarmResumeSurfaceSnapshot();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (consumeVolumeKeys
+            && (keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            MakepadNative.surfaceOnKeyDown(
+                keyCode,
+                event.getMetaState(),
+                event.getRepeatCount() > 0
+            );
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (consumeVolumeKeys
+            && (keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            MakepadNative.surfaceOnKeyUp(keyCode, event.getMetaState());
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
     }
 
     @Override
@@ -3014,9 +3049,16 @@ public class MakepadActivity
         }
     }
 
-    public void setVideoPlaybackRate(long videoId, double rate) {
-        VideoPlayerRunnable runnable = mVideoPlayerRunnables.get(videoId);
-        if(runnable != null) {
+    public void setVideoPlaybackRate(long videoId, final double rate) {
+        final VideoPlayerRunnable runnable = mVideoPlayerRunnables.get(videoId);
+        if (runnable == null) {
+            return;
+        }
+        // MediaPlayer was created on this handler; setPlaybackParams from the
+        // GL/JNI thread is ignored or throws on several OEM builds (硬解).
+        if (mVideoPlaybackHandler != null) {
+            mVideoPlaybackHandler.post(() -> runnable.setPlaybackRate(rate));
+        } else {
             runnable.setPlaybackRate(rate);
         }
     }
